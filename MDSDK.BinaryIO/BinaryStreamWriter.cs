@@ -12,18 +12,16 @@ namespace MDSDK.BinaryIO
     {
         private readonly bool _byteOrderIsNative;
 
-        private readonly Stream _sink;
+        private readonly Stream _stream;
 
         private readonly byte[] _buffer;
 
         private const int BufferSize = 4096;
 
-        private const int MaxBufferWriteLength = BufferSize / 4;
-
-        public BinaryStreamWriter(ByteOrder byteOrder, Stream sink)
+        public BinaryStreamWriter(Stream stream, ByteOrder byteOrder)
         {
+            _stream = stream;
             _byteOrderIsNative = byteOrder == BinaryIOUtils.NativeByteOrder;
-            _sink = sink;
             _buffer = new byte[BufferSize];
         }
 
@@ -32,8 +30,6 @@ namespace MDSDK.BinaryIO
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnsureSpaceInWriteBuffer(int count)
         {
-            Debug.Assert(count <= MaxBufferWriteLength);
-            
             var bytesAvailable = BufferSize - _bufferedDataLength;
             if (bytesAvailable < count)
             {
@@ -91,26 +87,15 @@ namespace MDSDK.BinaryIO
 
         public void Write(ReadOnlySpan<byte> data)
         {
-            var bytesToWriteToBuffer = Math.Min(BufferSize - _bufferedDataLength, data.Length);
-            if (bytesToWriteToBuffer > 0)
-            {
-                var bufferWriteSpan = GetBufferWriteSpan(bytesToWriteToBuffer);
-                data.CopyTo(bufferWriteSpan);
-                data = data[bytesToWriteToBuffer..];
-            }
-
-            Flush(FlushMode.Shallow);
-
-            while (data.Length > MaxBufferWriteLength)
-            {
-                _sink.Write(data);
-                data = data.Slice(MaxBufferWriteLength);
-            }
-
-            if (data.Length > 0)
+            if (data.Length < BufferSize - _bufferedDataLength)
             {
                 var bufferWriteSpan = GetBufferWriteSpan(data.Length);
                 data.CopyTo(bufferWriteSpan);
+            }
+            else
+            {
+                Flush(FlushMode.Shallow);
+                _stream.Write(data);
             }
         }
 
@@ -238,12 +223,12 @@ namespace MDSDK.BinaryIO
         {
             if (_bufferedDataLength > 0)
             {
-                _sink.Write(_buffer.AsSpan(0, _bufferedDataLength));
+                _stream.Write(_buffer.AsSpan(0, _bufferedDataLength));
                 _bufferedDataLength = 0;
 
                 if (mode == FlushMode.Deep)
                 {
-                    _sink.Flush();
+                    _stream.Flush();
                 }
             }
         }

@@ -10,20 +10,18 @@ namespace MDSDK.BinaryIO
 {
     public sealed class BinaryStreamReader
     {
-        private readonly bool _byteOrderIsNative;
+        private readonly Stream _stream;
 
-        private readonly Stream _source;
+        private readonly bool _byteOrderIsNative;
 
         private readonly byte[] _buffer;
 
         private const int BufferSize = 4096;
 
-        private const int MaxBufferReadLength = BufferSize / 4;
-
-        public BinaryStreamReader(ByteOrder byteOrder, Stream source)
+        public BinaryStreamReader(Stream stream, ByteOrder byteOrder)
         {
+            _stream = stream;
             _byteOrderIsNative = byteOrder == BinaryIOUtils.NativeByteOrder;
-            _source = source;
             _buffer = new byte[4096];
         }
 
@@ -33,8 +31,6 @@ namespace MDSDK.BinaryIO
 
         private void EnsureDataInReadBuffer(int count)
         {
-            Debug.Assert(count <= MaxBufferReadLength);
-
             if (_bufferedDataLength < count)
             {
                 if (_bufferedDataPointer + count > BufferSize)
@@ -45,7 +41,7 @@ namespace MDSDK.BinaryIO
 
                 do
                 {
-                    var bytesRead = _source.Read(_buffer.AsSpan(_bufferedDataPointer + _bufferedDataLength));
+                    var bytesRead = _stream.Read(_buffer.AsSpan(_bufferedDataPointer + _bufferedDataLength));
                     if (bytesRead == 0)
                     {
                         throw new IOException("Unexpected end of stream");
@@ -107,30 +103,33 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<byte> data)
         {
-            var bytesToReadFromBuffer = Math.Min(_bufferedDataLength, data.Length);
-            if (bytesToReadFromBuffer > 0)
-            {
-                var bufferReadSpan = GetBufferReadSpan(bytesToReadFromBuffer);
-                bufferReadSpan.CopyTo(data);
-                data = data[bytesToReadFromBuffer..];
-            }
-
-            while (data.Length > MaxBufferReadLength)
-            {
-                var bytesRead = _source.Read(data);
-                if (bytesRead == 0)
-                {
-                    throw new IOException("Unexpected end of stream");
-                }
-                data = data.Slice(bytesRead);
-            }
-
-            if (data.Length > 0)
+            if (data.Length <= _bufferedDataLength)
             {
                 var bufferReadSpan = GetBufferReadSpan(data.Length);
                 bufferReadSpan.CopyTo(data);
             }
+            else
+            {
+                if (_bufferedDataLength > 0)
+                {
+                    var n = _bufferedDataLength;
+                    var bufferReadSpan = GetBufferReadSpan(n);
+                    bufferReadSpan.CopyTo(data);
+                    data = data[n..];
+                }
+                
+                while (data.Length > 0)
+                {
+                    var n = _stream.Read(data);
+                    if (n == 0)
+                    {
+                        throw new IOException("Unexpected end of stream");
+                    }
+                    data = data[n..];
+                }
+            }
         }
+
         public void Read(Span<short> data)
         {
             if (_byteOrderIsNative)
