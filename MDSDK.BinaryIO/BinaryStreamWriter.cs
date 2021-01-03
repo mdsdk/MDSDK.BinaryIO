@@ -16,48 +16,52 @@ namespace MDSDK.BinaryIO
 
         private readonly byte[] _buffer;
 
+        private int _bufferWritePointer;
+
         private const int BufferSize = 4096;
+
+        private const int MaxWriteToBufferByteCount = 1024;
 
         public BinaryStreamWriter(Stream stream, ByteOrder byteOrder)
         {
             _stream = stream;
             _byteOrderIsNative = byteOrder == BinaryIOUtils.NativeByteOrder;
             _buffer = new byte[BufferSize];
+            _bufferWritePointer = 0;
         }
 
-        private int _bufferedDataLength;
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void EnsureSpaceInWriteBuffer(int count)
+        private void BeginWriteToBuffer(int byteCount)
         {
-            var bytesAvailable = BufferSize - _bufferedDataLength;
-            if (bytesAvailable < count)
+            Debug.Assert(byteCount <= MaxWriteToBufferByteCount);
+
+            if (_bufferWritePointer + byteCount > BufferSize)
             {
                 Flush(FlushMode.Shallow);
             }
         }
 
-        private void UpdateBytesWrittenToBuffer(int count)
+        private void EndWriteToBuffer(int byteCount)
         {
-            _bufferedDataLength += count;
+            _bufferWritePointer += byteCount;
         }
 
         public void Write(byte datum)
         {
-            EnsureSpaceInWriteBuffer(1);
-            _buffer[_bufferedDataLength] = datum;
-            UpdateBytesWrittenToBuffer(1);
+            BeginWriteToBuffer(1);
+            _buffer[_bufferWritePointer] = datum;
+            EndWriteToBuffer(1);
         }
 
         private Span<byte> GetBufferWriteSpan(int count)
         {
-            EnsureSpaceInWriteBuffer(count);
-            var bufferWriteSpan = _buffer.AsSpan(_bufferedDataLength, count);
-            UpdateBytesWrittenToBuffer(count);
+            BeginWriteToBuffer(count);
+            var bufferWriteSpan = _buffer.AsSpan(_bufferWritePointer, count);
+            EndWriteToBuffer(count);
             return bufferWriteSpan;
         }
 
-        private void WriteBuffered<T>(T datum)
+        private void WritePrimitive<T>(T datum) where T : struct
         {
             var bufferWriteSpan = GetBufferWriteSpan(Unsafe.SizeOf<T>());
 
@@ -69,25 +73,25 @@ namespace MDSDK.BinaryIO
             }
         }
 
-        public void Write(short datum) => WriteBuffered(datum);
-        
-        public void Write(ushort datum) => WriteBuffered(datum);
-        
-        public void Write(int datum) => WriteBuffered(datum);
-        
-        public void Write(uint datum) => WriteBuffered(datum);
-        
-        public void Write(long datum) => WriteBuffered(datum);
-        
-        public void Write(ulong datum) => WriteBuffered(datum);
-        
-        public void Write(float datum) => WriteBuffered(datum);
-       
-        public void Write(double datum) => WriteBuffered(datum);
+        public void Write(short datum) => WritePrimitive(datum);
+
+        public void Write(ushort datum) => WritePrimitive(datum);
+
+        public void Write(int datum) => WritePrimitive(datum);
+
+        public void Write(uint datum) => WritePrimitive(datum);
+
+        public void Write(long datum) => WritePrimitive(datum);
+
+        public void Write(ulong datum) => WritePrimitive(datum);
+
+        public void Write(float datum) => WritePrimitive(datum);
+
+        public void Write(double datum) => WritePrimitive(datum);
 
         public void Write(ReadOnlySpan<byte> data)
         {
-            if (data.Length < BufferSize - _bufferedDataLength)
+            if (data.Length <= MaxWriteToBufferByteCount)
             {
                 var bufferWriteSpan = GetBufferWriteSpan(data.Length);
                 data.CopyTo(bufferWriteSpan);
@@ -219,12 +223,32 @@ namespace MDSDK.BinaryIO
             }
         }
 
+        public void Write<T>(ReadOnlySpan<T> data) where T : struct
+        {
+            if (!_byteOrderIsNative)
+            {
+                throw new NotSupportedException("Non-primitive data types can only be written in native byte order");
+            }
+
+            Write(MemoryMarshal.AsBytes(data));
+        }
+
+        public void Write<T>(ref T datum) where T : struct
+        {
+            Write(MemoryMarshal.CreateReadOnlySpan(ref datum, 1));
+        }
+
+        public void Write<T>(T datum) where T : struct
+        {
+            Write(ref datum);
+        }
+
         public void Flush(FlushMode mode)
         {
-            if (_bufferedDataLength > 0)
+            if (_bufferWritePointer > 0)
             {
-                _stream.Write(_buffer.AsSpan(0, _bufferedDataLength));
-                _bufferedDataLength = 0;
+                _stream.Write(_buffer.AsSpan(0, _bufferWritePointer));
+                _bufferWritePointer = 0;
 
                 if (mode == FlushMode.Deep)
                 {
