@@ -10,8 +10,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\PerformanceTesting.NET\MDSDK.PerformanceTesting\MDSDK.PerformanceTesting.csproj" />
     <ProjectReference Include="..\MDSDK.BinaryIO\MDSDK.BinaryIO.csproj" />
-    <ProjectReference Include="..\MDSDK.PerformanceTesting\MDSDK.PerformanceTesting.csproj" />
   </ItemGroup>
 
 </Project>
