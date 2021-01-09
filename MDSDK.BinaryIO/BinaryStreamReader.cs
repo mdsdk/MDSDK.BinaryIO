@@ -10,9 +10,9 @@ namespace MDSDK.BinaryIO
 {
     public sealed class BinaryStreamReader
     {
-        private readonly Stream _stream;
+        public Stream Stream { get; }
 
-        private readonly bool _byteOrderIsNative;
+        public ByteOrder ByteOrder { get; }
 
         private readonly byte[] _buffer;
 
@@ -26,11 +26,14 @@ namespace MDSDK.BinaryIO
 
         public BinaryStreamReader(Stream stream, ByteOrder byteOrder)
         {
-            _stream = stream;
-            _byteOrderIsNative = byteOrder == BinaryIOUtils.NativeByteOrder;
+            Stream = stream;
+
+            ByteOrder = byteOrder;
+
             _buffer = new byte[4096];
             _bufferReadPointer = 0;
             _bufferedDataLength = 0;
+
             _position = 0;
             _endPosition = stream.CanSeek ? stream.Length : long.MaxValue;
         }
@@ -50,6 +53,8 @@ namespace MDSDK.BinaryIO
 
         public long BytesRemaining => _endPosition - _position;
 
+        public bool AtEnd => _position == _endPosition;
+
         private void BeginReadFromBuffer(int count)
         {
             if (_bufferedDataLength < count)
@@ -62,7 +67,7 @@ namespace MDSDK.BinaryIO
 
                 do
                 {
-                    var bytesRead = _stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
+                    var bytesRead = Stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
                     if (bytesRead == 0)
                     {
                         throw new IOException("Unexpected end of stream");
@@ -79,7 +84,7 @@ namespace MDSDK.BinaryIO
             _bufferReadPointer = (_bufferedDataLength == 0) ? 0 : _bufferReadPointer + count;
         }
 
-        private byte ReadByte()
+        public byte ReadByte()
         {
             Position++;
             BeginReadFromBuffer(1);
@@ -88,7 +93,11 @@ namespace MDSDK.BinaryIO
             return datum;
         }
 
+        public sbyte ReadSByte() => (sbyte)ReadByte();
+
         public void Read(out byte datum) => datum = ReadByte();
+
+        public void Read(out sbyte datum) => datum = ReadSByte();
 
         private Span<byte> GetBufferReadSpan(int count)
         {
@@ -98,15 +107,19 @@ namespace MDSDK.BinaryIO
             return readSpan;
         }
 
-        private T ReadPrimitive<T>() where T : struct
+        public T ReadPrimitive<T>() where T : struct
         {
+            Debug.Assert(BinaryIOUtils.IsPrimitiveType(typeof(T)));
+
             var datumSize = Unsafe.SizeOf<T>();
+
+            Debug.Assert((datumSize > 1) && (datumSize <= 8));
 
             Position += datumSize;
 
             var bufferReadSpan = GetBufferReadSpan(datumSize);
 
-            if (!_byteOrderIsNative)
+            if (ByteOrder != BinaryIOUtils.NativeByteOrder)
             {
                 bufferReadSpan.Reverse();
             }
@@ -151,7 +164,7 @@ namespace MDSDK.BinaryIO
 
                 while (data.Length > 0)
                 {
-                    var n = _stream.Read(data);
+                    var n = Stream.Read(data);
                     if (n == 0)
                     {
                         throw new IOException("Unexpected end of stream");
@@ -163,7 +176,7 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<short> data)
         {
-            if (_byteOrderIsNative)
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
                 Read(MemoryMarshal.AsBytes(data));
             }
@@ -178,7 +191,7 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<ushort> data)
         {
-            if (_byteOrderIsNative)
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
                 Read(MemoryMarshal.AsBytes(data));
             }
@@ -193,7 +206,7 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<int> data)
         {
-            if (_byteOrderIsNative)
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
                 Read(MemoryMarshal.AsBytes(data));
             }
@@ -208,7 +221,7 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<uint> data)
         {
-            if (_byteOrderIsNative)
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
                 Read(MemoryMarshal.AsBytes(data));
             }
@@ -223,7 +236,7 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<long> data)
         {
-            if (_byteOrderIsNative)
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
                 Read(MemoryMarshal.AsBytes(data));
             }
@@ -238,7 +251,7 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<ulong> data)
         {
-            if (_byteOrderIsNative)
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
                 Read(MemoryMarshal.AsBytes(data));
             }
@@ -253,7 +266,7 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<float> data)
         {
-            if (_byteOrderIsNative)
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
                 Read(MemoryMarshal.AsBytes(data));
             }
@@ -268,7 +281,7 @@ namespace MDSDK.BinaryIO
 
         public void Read(Span<double> data)
         {
-            if (_byteOrderIsNative)
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
                 Read(MemoryMarshal.AsBytes(data));
             }
@@ -281,9 +294,11 @@ namespace MDSDK.BinaryIO
             }
         }
 
-        public void Read<T>(Span<T> data) where T : struct
+        public void ReadNonPrimitive<T>(Span<T> data) where T : struct
         {
-            if (!_byteOrderIsNative)
+            Debug.Assert(!BinaryIOUtils.IsPrimitiveType(typeof(T)));
+
+            if (ByteOrder != BinaryIOUtils.NativeByteOrder)
             {
                 throw new NotSupportedException("Non-primitive data types can only be read in native byte order");
             }
@@ -291,30 +306,27 @@ namespace MDSDK.BinaryIO
             Read(MemoryMarshal.AsBytes(data));
         }
 
-        public void Read<T>(ref T datum) where T : struct
+        public void ReadNonPrimitive<T>(ref T datum) where T : struct
         {
-            Read(MemoryMarshal.CreateSpan(ref datum, 1));
+            ReadNonPrimitive(MemoryMarshal.CreateSpan(ref datum, 1));
         }
 
-        public T Read<T>() where T : struct
+        public T ReadNonPrimitive<T>() where T : struct
         {
-            if (BinaryIOUtils.IsPrimitiveType(typeof(T)))
-            {
-                return ReadPrimitive<T>();
-            }
-            else
-            {
-                var datum = default(T);
-                Read(ref datum);
-                return datum;
-            }
+            var datum = default(T);
+            ReadNonPrimitive(ref datum);
+            return datum;
         }
 
         public T[] ReadArray<T>(int length) where T : struct
         {
             var array = new T[length];
-            
-            if (BinaryIOUtils.IsPrimitiveType(typeof(T)))
+
+            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
+            {
+                Read(MemoryMarshal.AsBytes<T>(array));
+            }
+            else if (BinaryIOUtils.IsPrimitiveType(typeof(T)))
             {
                 for (var i = 0; i < length; i++)
                 {
@@ -323,12 +335,9 @@ namespace MDSDK.BinaryIO
             }
             else
             {
-                for (var i = 0; i < length; i++)
-                {
-                    Read(ref array[i]);
-                }
+                throw new NotSupportedException("Non-primitive data types can only be read in native byte order");
             }
-            
+
             return array;
         }
 
@@ -386,16 +395,16 @@ namespace MDSDK.BinaryIO
                 count -= _bufferedDataLength;
                 EndReadFromBuffer(_bufferedDataLength);
 
-                if (_stream.CanSeek)
+                if (Stream.CanSeek)
                 {
-                    _stream.Seek(count, SeekOrigin.Current);
+                    Stream.Seek(count, SeekOrigin.Current);
                 }
                 else
                 {
                     while (count > 0)
                     {
                         var n = (int)Math.Min(count, _buffer.Length);
-                        var bytesRead = _stream.Read(_buffer, 0, n);
+                        var bytesRead = Stream.Read(_buffer, 0, n);
                         if (bytesRead == 0)
                         {
                             throw new IOException("Unexpected end of stream");

@@ -127,7 +127,7 @@ namespace MDSDK.BinaryIO.Test
 
             if (byteOrder == BinaryIOUtils.NativeByteOrder)
             {
-                TestReadArray(10, input.Read, default(ComplexStruct));
+                TestReadArray(10, input.ReadNonPrimitive, default(ComplexStruct));
             }
         }
 

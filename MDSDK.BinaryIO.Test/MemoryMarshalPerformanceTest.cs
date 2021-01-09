@@ -1,6 +1,6 @@
 ﻿// Copyright (c) Robin Boerdijk - All rights reserved - See LICENSE file for license terms
 
-using MDSDK.PerformanceTesting;
+using MDSDK.Testing;
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -9,7 +9,7 @@ namespace MDSDK.BinaryIO.Test
 {
     public static class MemoryMarshalPerformanceTest
     {
-        private static readonly byte[] RandomBytes = PerformanceTestDataGenerator.MakeRandomByteArray(Marshal.SizeOf<PrimitiveStruct>());
+        private static readonly byte[] RandomBytes = TestDataGenerator.MakeRandomByteArray(Marshal.SizeOf<PrimitiveStruct>());
 
         const int TestReadIterations = 100000000;
      
