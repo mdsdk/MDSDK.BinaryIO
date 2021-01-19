@@ -30,11 +30,11 @@ namespace MDSDK.BinaryIO.Test
             writeSpan(array);
         }
 
-        private delegate void Read<T>(out T datum);
+        private delegate T Read<T>();
 
         private static void TestRead<T>(Read<T> read, T testValue) where T : struct, IEquatable<T>
         {
-            read(out T datum);
+            var datum = read();
             Trace.Assert(datum.Equals(testValue));
         }
 
@@ -83,7 +83,7 @@ namespace MDSDK.BinaryIO.Test
 
             Trace.Assert(stream.Position == 41);
 
-            TestWriteArray(9 * ushort.MaxValue, TestByte, output.Write);
+            TestWriteArray(9 * ushort.MaxValue, TestByte, output.WriteBytes);
             TestWriteArray(8 * ushort.MaxValue, TestShort, output.Write);
             TestWriteArray(7 * ushort.MaxValue, TestUShort, output.Write);
             TestWriteArray(6 * ushort.MaxValue, TestInt, output.Write);
@@ -92,11 +92,6 @@ namespace MDSDK.BinaryIO.Test
             TestWriteArray(3 * ushort.MaxValue, TestULong, output.Write);
             TestWriteArray(2 * ushort.MaxValue, TestFloat, output.Write);
             TestWriteArray(1 * ushort.MaxValue, TestDouble, output.Write);
-            
-            if (byteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                TestWriteArray(10, default(ComplexStruct), output.Write);
-            }
 
             output.Flush(FlushMode.Deep);
         }
@@ -105,15 +100,15 @@ namespace MDSDK.BinaryIO.Test
         {
             var input = new BinaryStreamReader(stream, byteOrder);
 
-            TestRead(input.Read, TestByte);
-            TestRead(input.Read, TestShort);
-            TestRead(input.Read, TestUShort);
-            TestRead(input.Read, TestInt);
-            TestRead(input.Read, TestUInt);
-            TestRead(input.Read, TestLong);
-            TestRead(input.Read, TestULong);
-            TestRead(input.Read, TestFloat);
-            TestRead(input.Read, TestDouble);
+            TestRead(input.ReadByte, TestByte);
+            TestRead(input.Read<Int16>, TestShort);
+            TestRead(input.Read<UInt16>, TestUShort);
+            TestRead(input.Read<Int32>, TestInt);
+            TestRead(input.Read<UInt32>, TestUInt);
+            TestRead(input.Read<Int64>, TestLong);
+            TestRead(input.Read<UInt64>, TestULong);
+            TestRead(input.Read<Single>, TestFloat);
+            TestRead(input.Read<Double>, TestDouble);
 
             TestReadArray(9 * ushort.MaxValue, input.Read, TestByte);
             TestReadArray(8 * ushort.MaxValue, input.Read, TestShort);
@@ -124,11 +119,6 @@ namespace MDSDK.BinaryIO.Test
             TestReadArray(3 * ushort.MaxValue, input.Read, TestULong);
             TestReadArray(2 * ushort.MaxValue, input.Read, TestFloat);
             TestReadArray(1 * ushort.MaxValue, input.Read, TestDouble);
-
-            if (byteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                TestReadArray(10, input.ReadNonPrimitive, default(ComplexStruct));
-            }
         }
 
         private static void Test(ByteOrder byteOrder)

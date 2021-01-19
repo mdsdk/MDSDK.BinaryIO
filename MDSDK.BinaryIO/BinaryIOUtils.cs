@@ -8,10 +8,9 @@ namespace MDSDK.BinaryIO
     {
         public static readonly ByteOrder NativeByteOrder = BitConverter.IsLittleEndian ? ByteOrder.LittleEndian : ByteOrder.BigEndian;
         
-        public static bool IsPrimitiveType(Type type)
+        public static bool IsByteSwappableType(Type type)
         {
-            return (type == typeof(byte))
-                || (type == typeof(short))
+            return (type == typeof(short))
                 || (type == typeof(ushort))
                 || (type == typeof(int))
                 || (type == typeof(uint))

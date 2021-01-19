@@ -12,7 +12,7 @@ namespace MDSDK.BinaryIO
     {
         public Stream Stream { get; }
 
-        public ByteOrder ByteOrder { get; }
+        public ByteOrder ByteOrder { get; set; }
 
         private readonly byte[] _buffer;
 
@@ -34,7 +34,7 @@ namespace MDSDK.BinaryIO
             _bufferReadPointer = 0;
             _bufferedDataLength = 0;
 
-            _position = 0;
+            _position = stream.CanSeek ? stream.Position : 0;
             _endPosition = stream.CanSeek ? stream.Length : long.MaxValue;
         }
 
@@ -67,6 +67,7 @@ namespace MDSDK.BinaryIO
 
                 do
                 {
+                    // TODO: check implementation if this should use (byte[], offset, count) instead
                     var bytesRead = Stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
                     if (bytesRead == 0)
                     {
@@ -95,10 +96,6 @@ namespace MDSDK.BinaryIO
 
         public sbyte ReadSByte() => (sbyte)ReadByte();
 
-        public void Read(out byte datum) => datum = ReadByte();
-
-        public void Read(out sbyte datum) => datum = ReadSByte();
-
         private Span<byte> GetBufferReadSpan(int count)
         {
             BeginReadFromBuffer(count);
@@ -107,13 +104,11 @@ namespace MDSDK.BinaryIO
             return readSpan;
         }
 
-        public T ReadPrimitive<T>() where T : struct
+        public T Read<T>() where T : struct, IFormattable
         {
-            Debug.Assert(BinaryIOUtils.IsPrimitiveType(typeof(T)));
+            Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
 
             var datumSize = Unsafe.SizeOf<T>();
-
-            Debug.Assert((datumSize > 1) && (datumSize <= 8));
 
             Position += datumSize;
 
@@ -127,23 +122,7 @@ namespace MDSDK.BinaryIO
             return Unsafe.ReadUnaligned<T>(ref MemoryMarshal.GetReference(bufferReadSpan));
         }
 
-        public void Read(out short datum) => datum = ReadPrimitive<short>();
-
-        public void Read(out ushort datum) => datum = ReadPrimitive<ushort>();
-
-        public void Read(out int datum) => datum = ReadPrimitive<int>();
-
-        public void Read(out uint datum) => datum = ReadPrimitive<uint>();
-
-        public void Read(out long datum) => datum = ReadPrimitive<long>();
-
-        public void Read(out ulong datum) => datum = ReadPrimitive<ulong>();
-
-        public void Read(out float datum) => datum = ReadPrimitive<float>();
-
-        public void Read(out double datum) => datum = ReadPrimitive<double>();
-
-        public void Read(Span<byte> data)
+        public void ReadBytes(Span<byte> data)
         {
             Position += data.Length;
 
@@ -174,171 +153,21 @@ namespace MDSDK.BinaryIO
             }
         }
 
-        public void Read(Span<short> data)
+        public void Read<T>(Span<T> data) where T : struct, IFormattable
         {
+            Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
+            
             if (ByteOrder == BinaryIOUtils.NativeByteOrder)
             {
-                Read(MemoryMarshal.AsBytes(data));
+                ReadBytes(MemoryMarshal.AsBytes(data));
             }
             else
             {
                 for (var i = 0; i < data.Length; i++)
                 {
-                    Read(out data[i]);
+                    data[i] = Read<T>();
                 }
             }
-        }
-
-        public void Read(Span<ushort> data)
-        {
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                Read(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    Read(out data[i]);
-                }
-            }
-        }
-
-        public void Read(Span<int> data)
-        {
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                Read(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    Read(out data[i]);
-                }
-            }
-        }
-
-        public void Read(Span<uint> data)
-        {
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                Read(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    Read(out data[i]);
-                }
-            }
-        }
-
-        public void Read(Span<long> data)
-        {
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                Read(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    Read(out data[i]);
-                }
-            }
-        }
-
-        public void Read(Span<ulong> data)
-        {
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                Read(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    Read(out data[i]);
-                }
-            }
-        }
-
-        public void Read(Span<float> data)
-        {
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                Read(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    Read(out data[i]);
-                }
-            }
-        }
-
-        public void Read(Span<double> data)
-        {
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                Read(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    Read(out data[i]);
-                }
-            }
-        }
-
-        public void ReadNonPrimitive<T>(Span<T> data) where T : struct
-        {
-            Debug.Assert(!BinaryIOUtils.IsPrimitiveType(typeof(T)));
-
-            if (ByteOrder != BinaryIOUtils.NativeByteOrder)
-            {
-                throw new NotSupportedException("Non-primitive data types can only be read in native byte order");
-            }
-
-            Read(MemoryMarshal.AsBytes(data));
-        }
-
-        public void ReadNonPrimitive<T>(ref T datum) where T : struct
-        {
-            ReadNonPrimitive(MemoryMarshal.CreateSpan(ref datum, 1));
-        }
-
-        public T ReadNonPrimitive<T>() where T : struct
-        {
-            var datum = default(T);
-            ReadNonPrimitive(ref datum);
-            return datum;
-        }
-
-        public T[] ReadArray<T>(int length) where T : struct
-        {
-            var array = new T[length];
-
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                Read(MemoryMarshal.AsBytes<T>(array));
-            }
-            else if (BinaryIOUtils.IsPrimitiveType(typeof(T)))
-            {
-                for (var i = 0; i < length; i++)
-                {
-                    array[i] = ReadPrimitive<T>();
-                }
-            }
-            else
-            {
-                throw new NotSupportedException("Non-primitive data types can only be read in native byte order");
-            }
-
-            return array;
         }
 
         private class Disposable : IDisposable
@@ -360,26 +189,29 @@ namespace MDSDK.BinaryIO
             var newEndPosition = Position + length;
             if (newEndPosition > _endPosition)
             {
-                throw new IOException($"Window exceeds stream by {newEndPosition - _endPosition} bytes");
+                throw new IOException($"Window exceeds stream or parent by {newEndPosition - _endPosition} bytes");
             }
 
             var originalEndPosition = _endPosition;
 
             _endPosition = newEndPosition;
 
-            return new Disposable(() => _endPosition = originalEndPosition);
+            return new Disposable(() =>
+            {
+                _endPosition = originalEndPosition;
+            });
         }
 
-        public byte[] ReadBytes(int count)
+        public byte[] ReadBytes(long count)
         {
             var bytes = new byte[count];
-            Read(bytes);
+            ReadBytes(bytes);
             return bytes;
         }
 
         public byte[] ReadRemainingBytes()
         {
-            return ReadBytes(checked((int)BytesRemaining));
+            return ReadBytes(BytesRemaining);
         }
 
         public void SkipBytes(long count)
