@@ -64,7 +64,7 @@ namespace MDSDK.BinaryIO
             Position++;
         }
 
-        public void WriteByte(sbyte datum) => WriteByte((byte)datum);
+        public void WriteSByte(sbyte datum) => WriteByte((byte)datum);
 
         private Span<byte> GetBufferWriteSpan(int count)
         {
