@@ -26,7 +26,7 @@ namespace MDSDK.BinaryIO
 
         private void CancellableWaitFor(SelectMode selectMode)
         {
-            while (!_socket.Poll(CancellationPollIntervalInMicroseconds, SelectMode.SelectRead))
+            while (!_socket.Poll(CancellationPollIntervalInMicroseconds, selectMode))
             {
                 _cancellationToken.ThrowIfCancellationRequested();
             }
