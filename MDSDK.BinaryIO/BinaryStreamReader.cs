@@ -38,6 +38,18 @@ namespace MDSDK.BinaryIO
             _length = stream.CanSeek ? stream.Length : long.MaxValue;
         }
 
+        public BinaryStreamReader(ByteOrder byteOrder, byte[] data)
+        {
+            ByteOrder = byteOrder;
+
+            _buffer = data;
+            _bufferReadPointer = 0;
+            _bufferedDataLength = data.Length;
+
+            _position = 0;
+            _length = data.Length;
+        }
+
         public long Position
         {
             get { return _position; }
@@ -67,8 +79,7 @@ namespace MDSDK.BinaryIO
 
                 do
                 {
-                    // TODO: check implementation if this should use (byte[], offset, count) instead
-                    var bytesRead = Stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
+                    var bytesRead = (Stream == null) ? 0 : Stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
                     if (bytesRead == 0)
                     {
                         throw new IOException("Unexpected end of stream");
@@ -104,7 +115,7 @@ namespace MDSDK.BinaryIO
             return readSpan;
         }
 
-        public T Read<T>() where T : struct, IFormattable
+        public T Read<T>() where T : unmanaged, IFormattable
         {
             Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
 
@@ -156,7 +167,7 @@ namespace MDSDK.BinaryIO
             }
         }
 
-        public void Read<T>(Span<T> data) where T : struct, IFormattable
+        public void Read<T>(Span<T> data) where T : unmanaged, IFormattable
         {
             Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
 

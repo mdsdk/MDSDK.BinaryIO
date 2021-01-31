@@ -74,7 +74,7 @@ namespace MDSDK.BinaryIO
             return bufferWriteSpan;
         }
 
-        public void Write<T>(T datum) where T : struct, IFormattable
+        public void Write<T>(T datum) where T : unmanaged, IFormattable
         {
             Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
 
@@ -108,7 +108,7 @@ namespace MDSDK.BinaryIO
             Position += data.Length;
         }
 
-        public void Write<T>(ReadOnlySpan<T> data) where T : struct, IFormattable
+        public void Write<T>(ReadOnlySpan<T> data) where T : unmanaged, IFormattable
         {
             Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
 
