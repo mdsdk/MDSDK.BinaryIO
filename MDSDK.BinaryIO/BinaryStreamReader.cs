@@ -10,9 +10,9 @@ namespace MDSDK.BinaryIO
 {
     public sealed class BinaryStreamReader
     {
-        public Stream Stream { get; }
-
         public ByteOrder ByteOrder { get; set; }
+        
+        private readonly Stream _stream;
 
         private readonly byte[] _buffer;
 
@@ -24,11 +24,11 @@ namespace MDSDK.BinaryIO
 
         private long _length;
 
-        public BinaryStreamReader(Stream stream, ByteOrder byteOrder, int bufferSize = 4096)
+        public BinaryStreamReader(ByteOrder byteOrder, Stream stream, int bufferSize = 4096)
         {
-            Stream = stream;
-
             ByteOrder = byteOrder;
+
+            _stream = stream;
 
             _buffer = new byte[bufferSize];
             _bufferReadPointer = 0;
@@ -36,6 +36,8 @@ namespace MDSDK.BinaryIO
 
             _position = stream.CanSeek ? stream.Position : 0;
             _length = stream.CanSeek ? stream.Length : long.MaxValue;
+
+            ByteOrder = byteOrder;
         }
 
         public BinaryStreamReader(ByteOrder byteOrder, byte[] data)
@@ -71,6 +73,11 @@ namespace MDSDK.BinaryIO
         {
             if (_bufferedDataLength < count)
             {
+                if (_stream == null)
+                {
+                    throw new IOException("Attempt to read beyond end of data");
+                }
+
                 if (_bufferReadPointer + count > _buffer.Length)
                 {
                     _buffer.AsSpan(_bufferReadPointer, _bufferedDataLength).CopyTo(_buffer);
@@ -79,7 +86,7 @@ namespace MDSDK.BinaryIO
 
                 do
                 {
-                    var bytesRead = (Stream == null) ? 0 : Stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
+                    var bytesRead = _stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
                     if (bytesRead == 0)
                     {
                         throw new IOException("Unexpected end of stream");
@@ -147,7 +154,7 @@ namespace MDSDK.BinaryIO
             else
             {
                 var maxBytesToReadFromStream = (int)Math.Min(BytesRemaining, data.Length);
-                n = Stream.Read(data.Slice(0, maxBytesToReadFromStream));
+                n = _stream.Read(data.Slice(0, maxBytesToReadFromStream));
             }
 
             Position += n;
@@ -200,7 +207,7 @@ namespace MDSDK.BinaryIO
             }
             _length = oldLength;
         }
-        
+
         public T Read<T>(long length, Func<T> readFunc)
         {
             T result = default;
@@ -233,16 +240,16 @@ namespace MDSDK.BinaryIO
                 count -= _bufferedDataLength;
                 EndReadFromBuffer(_bufferedDataLength);
 
-                if (Stream.CanSeek)
+                if (_stream.CanSeek)
                 {
-                    Stream.Seek(count, SeekOrigin.Current);
+                    _stream.Seek(count, SeekOrigin.Current);
                 }
                 else
                 {
                     while (count > 0)
                     {
                         var n = (int)Math.Min(count, _buffer.Length);
-                        var bytesRead = Stream.Read(_buffer, 0, n);
+                        var bytesRead = _stream.Read(_buffer, 0, n);
                         if (bytesRead == 0)
                         {
                             throw new IOException("Unexpected end of stream");

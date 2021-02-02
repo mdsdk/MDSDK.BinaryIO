@@ -50,9 +50,9 @@ namespace MDSDK.BinaryIO.Test
             }
         }
 
-        private static void TestWrite(Stream stream, ByteOrder byteOrder)
+        private static void TestWrite(ByteOrder byteOrder, Stream stream)
         {
-            var output = new BinaryStreamWriter(stream, byteOrder);
+            var output = new BinaryStreamWriter(byteOrder, stream);
 
             Trace.Assert(stream.Position == 0);
 
@@ -96,9 +96,9 @@ namespace MDSDK.BinaryIO.Test
             output.Flush(FlushMode.Deep);
         }
 
-        private static void TestRead(Stream stream, ByteOrder byteOrder)
+        private static void TestRead(ByteOrder byteOrder, Stream stream)
         {
-            var input = new BinaryStreamReader(stream, byteOrder);
+            var input = new BinaryStreamReader(byteOrder, stream);
 
             TestRead(input.ReadByte, TestByte);
             TestRead(input.Read<Int16>, TestShort);
@@ -126,11 +126,11 @@ namespace MDSDK.BinaryIO.Test
             Console.WriteLine("Testing " + byteOrder);
             using var stream = new MemoryStream();
 
-            TestWrite(stream, byteOrder);
+            TestWrite(byteOrder, stream);
             Console.WriteLine("    Write OK");
 
             stream.Seek(0, SeekOrigin.Begin);
-            TestRead(stream, byteOrder);
+            TestRead(byteOrder, stream);
             Console.WriteLine("    Read OK");
         }
 

@@ -10,7 +10,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\Testing\MDSDK.Testing\MDSDK.Testing.csproj" />
+    <ProjectReference Include="..\..\MDSDK.Testing\MDSDK.Testing\MDSDK.Testing.csproj" />
     <ProjectReference Include="..\MDSDK.BinaryIO\MDSDK.BinaryIO.csproj" />
   </ItemGroup>
 

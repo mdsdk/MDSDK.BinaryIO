@@ -10,9 +10,9 @@ namespace MDSDK.BinaryIO
 {
     public sealed class BinaryStreamWriter
     {
-        public Stream Stream { get; }
-
         public ByteOrder ByteOrder { get; set; }
+
+        private readonly Stream _stream;
 
         private readonly byte[] _buffer;
 
@@ -24,10 +24,11 @@ namespace MDSDK.BinaryIO
 
         private long _position;
 
-        public BinaryStreamWriter(Stream stream, ByteOrder byteOrder)
+        public BinaryStreamWriter(ByteOrder byteOrder, Stream stream)
         {
-            Stream = stream;
             ByteOrder = byteOrder;
+            
+            _stream = stream;
 
             _buffer = new byte[BufferSize];
             _bufferWritePointer = 0;
@@ -102,7 +103,7 @@ namespace MDSDK.BinaryIO
             else
             {
                 Flush(FlushMode.Shallow);
-                Stream.Write(data);
+                _stream.Write(data);
             }
 
             Position += data.Length;
@@ -137,12 +138,12 @@ namespace MDSDK.BinaryIO
         {
             if (_bufferWritePointer > 0)
             {
-                Stream.Write(_buffer.AsSpan(0, _bufferWritePointer));
+                _stream.Write(_buffer.AsSpan(0, _bufferWritePointer));
                 _bufferWritePointer = 0;
 
                 if (mode == FlushMode.Deep)
                 {
-                    Stream.Flush();
+                    _stream.Flush();
                 }
             }
         }
