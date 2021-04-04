@@ -65,6 +65,8 @@ namespace MDSDK.BinaryIO
             }
         }
 
+        public long Length => _length;
+
         public long BytesRemaining => _length - _position;
 
         public bool AtEnd => _position == _length;
