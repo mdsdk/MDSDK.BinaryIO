@@ -40,16 +40,21 @@ namespace MDSDK.BinaryIO
             ByteOrder = byteOrder;
         }
 
-        public BinaryStreamReader(ByteOrder byteOrder, byte[] data)
+        public BinaryStreamReader(ByteOrder byteOrder, byte[] data, int length)
         {
             ByteOrder = byteOrder;
 
             _buffer = data;
             _bufferReadPointer = 0;
-            _bufferedDataLength = data.Length;
+            _bufferedDataLength = length;
 
             _position = 0;
-            _length = data.Length;
+            _length = length;
+        }
+
+        public BinaryStreamReader(ByteOrder byteOrder, byte[] data)
+            : this(byteOrder, data, data.Length)
+        {
         }
 
         public long Position
