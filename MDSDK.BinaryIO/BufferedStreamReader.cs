@@ -1,18 +1,13 @@
 ﻿// Copyright (c) Robin Boerdijk - All rights reserved - See LICENSE file for license terms
 
 using System;
-using System.Diagnostics;
 using System.IO;
-using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
 
 namespace MDSDK.BinaryIO
 {
-    public sealed class BinaryStreamReader
+    public sealed class BufferedStreamReader
     {
-        public ByteOrder ByteOrder { get; set; }
-        
-        private readonly Stream _stream;
+        public Stream Stream { get; }
 
         private readonly byte[] _buffer;
 
@@ -20,67 +15,56 @@ namespace MDSDK.BinaryIO
 
         private int _bufferedDataLength;
 
-        private long _position;
-
-        private long _length;
-
-        public BinaryStreamReader(ByteOrder byteOrder, Stream stream, int bufferSize = 4096)
+        public BufferedStreamReader(Stream stream, int bufferSize = 4096)
         {
-            ByteOrder = byteOrder;
-
-            _stream = stream;
+             Stream = stream;
 
             _buffer = new byte[bufferSize];
             _bufferReadPointer = 0;
             _bufferedDataLength = 0;
 
-            _position = stream.CanSeek ? stream.Position : 0;
-            _length = stream.CanSeek ? stream.Length : long.MaxValue;
-
-            ByteOrder = byteOrder;
+            Position = stream.CanSeek ? stream.Position : 0;
+            Length = stream.CanSeek ? stream.Length : long.MaxValue;
         }
 
-        public BinaryStreamReader(ByteOrder byteOrder, byte[] data, int length)
+        public BufferedStreamReader(byte[] data, int length)
         {
-            ByteOrder = byteOrder;
-
             _buffer = data;
             _bufferReadPointer = 0;
             _bufferedDataLength = length;
 
-            _position = 0;
-            _length = length;
+            Position = 0;
+            Length = length;
         }
 
-        public BinaryStreamReader(ByteOrder byteOrder, byte[] data)
-            : this(byteOrder, data, data.Length)
+        public BufferedStreamReader(byte[] data)
+            : this(data, data.Length)
         {
         }
 
-        public long Position
+        public long Position { get; private set; }
+
+        public long Length { get; private set; }
+
+        public long BytesRemaining => Length - Position;
+
+        public bool AtEnd => Position == Length;
+
+        internal void PreAdvancePosition(int count)
         {
-            get { return _position; }
-            private set
+            var newPosition = Position + count;
+            if (newPosition > Length)
             {
-                if (value > _length)
-                {
-                    throw new IOException($"Attempt to consume {value - _length} more bytes than available");
-                }
-                _position = value;
+                throw new IOException($"Attempt to consume {newPosition - Length} more bytes than available");
             }
+            Position = newPosition;
         }
 
-        public long Length => _length;
-
-        public long BytesRemaining => _length - _position;
-
-        public bool AtEnd => _position == _length;
-
-        private void BeginReadFromBuffer(int count)
+        internal void BeginReadFromBuffer(int count)
         {
             if (_bufferedDataLength < count)
             {
-                if (_stream == null)
+                if (Stream == null)
                 {
                     throw new IOException("Attempt to read beyond end of data");
                 }
@@ -93,7 +77,7 @@ namespace MDSDK.BinaryIO
 
                 do
                 {
-                    var bytesRead = _stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
+                    var bytesRead = Stream.Read(_buffer.AsSpan(_bufferReadPointer + _bufferedDataLength));
                     if (bytesRead == 0)
                     {
                         throw new IOException("Unexpected end of stream");
@@ -112,39 +96,20 @@ namespace MDSDK.BinaryIO
 
         public byte ReadByte()
         {
-            Position++;
+            PreAdvancePosition(1);
             BeginReadFromBuffer(1);
             var datum = _buffer[_bufferReadPointer];
             EndReadFromBuffer(1);
             return datum;
         }
 
-        public sbyte ReadSByte() => (sbyte)ReadByte();
-
-        private Span<byte> GetBufferReadSpan(int count)
+        internal Span<byte> GetBufferReadSpan(int count)
         {
+            PreAdvancePosition(count);
             BeginReadFromBuffer(count);
             var readSpan = _buffer.AsSpan(_bufferReadPointer, count);
             EndReadFromBuffer(count);
             return readSpan;
-        }
-
-        public T Read<T>() where T : unmanaged, IFormattable
-        {
-            Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
-
-            var datumSize = Unsafe.SizeOf<T>();
-
-            Position += datumSize;
-
-            var bufferReadSpan = GetBufferReadSpan(datumSize);
-
-            if (ByteOrder != BinaryIOUtils.NativeByteOrder)
-            {
-                bufferReadSpan.Reverse();
-            }
-
-            return Unsafe.ReadUnaligned<T>(ref MemoryMarshal.GetReference(bufferReadSpan));
         }
 
         public int ReadSome(Span<byte> data)
@@ -161,10 +126,10 @@ namespace MDSDK.BinaryIO
             else
             {
                 var maxBytesToReadFromStream = (int)Math.Min(BytesRemaining, data.Length);
-                n = _stream.Read(data.Slice(0, maxBytesToReadFromStream));
+                n = Stream.Read(data.Slice(0, maxBytesToReadFromStream));
+                Position += n;
             }
 
-            Position += n;
             return n;
         }
 
@@ -181,38 +146,21 @@ namespace MDSDK.BinaryIO
             }
         }
 
-        public void Read<T>(Span<T> data) where T : unmanaged, IFormattable
-        {
-            Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
-
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                ReadAll(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    data[i] = Read<T>();
-                }
-            }
-        }
-
         public void Read(long byteCount, Action readAction)
         {
             var newLength = Position + byteCount;
-            if (newLength > _length)
+            if (newLength > Length)
             {
-                throw new IOException($"Read {byteCount} bytes exceeds container by {newLength - _length} bytes");
+                throw new IOException($"Read {byteCount} bytes exceeds container by {newLength - Length} bytes");
             }
-            var oldLength = _length;
-            _length = newLength;
+            var oldLength = Length;
+            Length = newLength;
             readAction.Invoke();
             if (!AtEnd)
             {
                 throw new Exception($"Read action left {BytesRemaining} of {byteCount} bytes unread");
             }
-            _length = oldLength;
+            Length = oldLength;
         }
 
         public T Read<T>(long length, Func<T> readFunc)
@@ -247,16 +195,16 @@ namespace MDSDK.BinaryIO
                 count -= _bufferedDataLength;
                 EndReadFromBuffer(_bufferedDataLength);
 
-                if (_stream.CanSeek)
+                if (Stream.CanSeek)
                 {
-                    _stream.Seek(count, SeekOrigin.Current);
+                    Stream.Seek(count, SeekOrigin.Current);
                 }
                 else
                 {
                     while (count > 0)
                     {
                         var n = (int)Math.Min(count, _buffer.Length);
-                        var bytesRead = _stream.Read(_buffer, 0, n);
+                        var bytesRead = Stream.Read(_buffer, 0, n);
                         if (bytesRead == 0)
                         {
                             throw new IOException("Unexpected end of stream");

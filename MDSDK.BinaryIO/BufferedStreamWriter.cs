@@ -3,16 +3,12 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace MDSDK.BinaryIO
 {
-    public sealed class BinaryStreamWriter
+    public sealed class BufferedStreamWriter
     {
-        public ByteOrder ByteOrder { get; set; }
-
-        private readonly Stream _stream;
+        public Stream Stream { get; }
 
         private readonly byte[] _buffer;
 
@@ -24,11 +20,9 @@ namespace MDSDK.BinaryIO
 
         private long _position;
 
-        public BinaryStreamWriter(ByteOrder byteOrder, Stream stream)
+        public BufferedStreamWriter(Stream stream)
         {
-            ByteOrder = byteOrder;
-            
-            _stream = stream;
+            Stream = stream;
 
             _buffer = new byte[BufferSize];
             _bufferWritePointer = 0;
@@ -39,7 +33,7 @@ namespace MDSDK.BinaryIO
         public long Position
         {
             get { return _position; }
-            private set { _position = value; }
+            internal set { _position = value; }
         }
 
         private void BeginWriteToBuffer(int byteCount)
@@ -65,32 +59,12 @@ namespace MDSDK.BinaryIO
             Position++;
         }
 
-        public void WriteSByte(sbyte datum) => WriteByte((byte)datum);
-
-        private Span<byte> GetBufferWriteSpan(int count)
+        internal Span<byte> GetBufferWriteSpan(int count)
         {
             BeginWriteToBuffer(count);
             var bufferWriteSpan = _buffer.AsSpan(_bufferWritePointer, count);
             EndWriteToBuffer(count);
             return bufferWriteSpan;
-        }
-
-        public void Write<T>(T datum) where T : unmanaged, IFormattable
-        {
-            Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
-
-            var datumSize = Unsafe.SizeOf<T>();
-
-            var bufferWriteSpan = GetBufferWriteSpan(datumSize);
-
-            Unsafe.WriteUnaligned(ref MemoryMarshal.GetReference(bufferWriteSpan), datum);
-
-            if (ByteOrder != BinaryIOUtils.NativeByteOrder)
-            {
-                bufferWriteSpan.Reverse();
-            }
-
-            Position += datumSize;
         }
         
         public void WriteBytes(ReadOnlySpan<byte> data)
@@ -103,27 +77,10 @@ namespace MDSDK.BinaryIO
             else
             {
                 Flush(FlushMode.Shallow);
-                _stream.Write(data);
+                Stream.Write(data);
             }
 
             Position += data.Length;
-        }
-
-        public void Write<T>(ReadOnlySpan<T> data) where T : unmanaged, IFormattable
-        {
-            Debug.Assert(BinaryIOUtils.IsByteSwappableType(typeof(T)));
-
-            if (ByteOrder == BinaryIOUtils.NativeByteOrder)
-            {
-                WriteBytes(MemoryMarshal.AsBytes(data));
-            }
-            else
-            {
-                for (var i = 0; i < data.Length; i++)
-                {
-                    Write(data[i]);
-                }
-            }
         }
 
         public void WriteZeros(int count)
@@ -138,12 +95,12 @@ namespace MDSDK.BinaryIO
         {
             if (_bufferWritePointer > 0)
             {
-                _stream.Write(_buffer.AsSpan(0, _bufferWritePointer));
+                Stream.Write(_buffer.AsSpan(0, _bufferWritePointer));
                 _bufferWritePointer = 0;
 
                 if (mode == FlushMode.Deep)
                 {
-                    _stream.Flush();
+                    Stream.Flush();
                 }
             }
         }
