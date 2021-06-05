@@ -39,21 +39,19 @@ namespace MDSDK.BinaryIO
             return Unsafe.ReadUnaligned<T>(ref MemoryMarshal.GetReference(bufferReadSpan));
         }
 
-        public long BytesRemaining => Input.BytesRemaining;
-
-        public long GetRemainingDataCount(int datumSize)
+        public long GetRemainingDatumCount(int datumSize)
         {
-            if ((BytesRemaining % datumSize) != 0)
+            if ((Input.BytesRemaining % datumSize) != 0)
             {
-                throw new InvalidOperationException($"Bytes remaining {BytesRemaining} is not a multiple of {datumSize}");
+                throw new InvalidOperationException($"Bytes remaining {Input.BytesRemaining} is not a multiple of {datumSize}");
             }
-            return BytesRemaining / datumSize;
+            return Input.BytesRemaining / datumSize;
         }
 
-        public long GetRemainingDataCount<T>() where T : unmanaged, IFormattable 
+        public long GetRemainingDatumCount<T>() where T : unmanaged, IFormattable 
         {
             var datumSize = Unsafe.SizeOf<T>();
-            return GetRemainingDataCount(datumSize);
+            return GetRemainingDatumCount(datumSize);
         }
 
         public void Read(out byte datum) => datum = ReadByte();
